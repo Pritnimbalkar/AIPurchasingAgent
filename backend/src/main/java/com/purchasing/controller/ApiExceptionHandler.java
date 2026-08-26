@@ -1,0 +1,2 @@
+package com.purchasing.controller; import org.springframework.http.*; import org.springframework.web.bind.annotation.*; import java.util.*;
+@RestControllerAdvice public class ApiExceptionHandler { @ExceptionHandler(NoSuchElementException.class) ResponseEntity<Map<String,String>> notFound(NoSuchElementException e){return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error",e.getMessage()));} }

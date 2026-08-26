@@ -1,0 +1,1 @@
+package com.purchasing.repository; import com.purchasing.entity.PurchaseRecommendation; import org.springframework.data.jpa.repository.JpaRepository; public interface RecommendationRepository extends JpaRepository<PurchaseRecommendation,Long>{}
