@@ -1,6 +1,14 @@
-# AI Purchasing Agent — Scenario 1
+# AI Purchasing Agent
 
-A full-stack review workflow for system-generated purchase recommendations. The React dashboard calls a Spring Boot API; the backend agent investigates data through focused purchasing tools, determines a decision, creates a mock PO when appropriate, then validates it.
+An AI-powered purchasing agent that analyzes inventory, demand, supplier constraints, and budget to recommend purchase decisions.
+
+## 🚀 Live Demo
+
+[View Live Project](https://aipurchasingagent-1.onrender.com)
+
+## 🖥️ Backend API
+
+[Backend](https://aipurchasingagent-backend.onrender.com)
 
 ## Architecture
 
