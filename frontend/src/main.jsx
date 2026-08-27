@@ -1,3 +1,428 @@
-import React,{useEffect,useState}from'react';import{createRoot}from'react-dom/client';import'./styles.css';import'./input.css';import'./feedback.css';
-const API='http://localhost:8080/api';const fields=[['currentInventory','Current inventory','units','1'],['expectedDemand','Future demand forecast','units','1'],['averageDailyConsumption','Average daily consumption','units/day','0.01'],['forecastHorizonDays','Forecast period','days','1'],['openPurchaseOrders','Existing open POs','units','1'],['supplierLeadTimeDays','Supplier lead time','days','1'],['supplierMinimumOrderQuantity','Supplier MOQ','units','1'],['availableBudget','Available budget','$','0.01'],['availableStorageCapacity','Available storage','units','1']];const List=({items})=><ul className="detail-list">{items.map((item,i)=><li key={i}>{item}</li>)}</ul>;
-function App(){const[items,setItems]=useState([]),[rec,setRec]=useState(),[form,setForm]=useState({}),[review,setReview]=useState(),[loading,setLoading]=useState(false),[error,setError]=useState('');useEffect(()=>{fetch(API+'/purchasing/recommendations').then(r=>r.json()).then(data=>{setItems(data);select(data[0])}).catch(()=>setError('Backend unavailable. Start Spring Boot on port 8080.'))},[]);function select(item){setRec(item);setReview();setForm({currentInventory:String(item.currentInventory),expectedDemand:String(item.expectedDemand),averageDailyConsumption:String((item.expectedDemand/30).toFixed(1)),forecastHorizonDays:'30',openPurchaseOrders:String(item.openPurchaseOrders),supplierLeadTimeDays:String(item.leadTimeDays),supplierMinimumOrderQuantity:String(item.minimumOrderQuantity),availableBudget:String(item.availableBudget),availableStorageCapacity:String(item.storageCapacity)})}async function run(){setLoading(true);setError('');const payload=Object.fromEntries(Object.entries(form).map(([key,value])=>[key,value===''?null:Number(value)]));try{const r=await fetch(`${API}/purchasing/agent/review/${rec.id}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});if(!r.ok)throw Error();setReview(await r.json())}catch{setError('Could not complete review. Check the backend and values entered.')}finally{setLoading(false)}}if(!rec)return <main className="loading">Loading purchasing workspace… {error}</main>;const num=k=>Number(form[k])||0,net=Math.max(0,num('expectedDemand')-num('currentInventory')-num('openPurchaseOrders')),budgetCap=Math.floor(num('availableBudget')/Number(rec.unitCost)),storageCap=Math.max(0,num('availableStorageCapacity')-num('currentInventory')-num('openPurchaseOrders')),futureUse=Math.round(num('averageDailyConsumption')*num('forecastHorizonDays')),coverage=num('averageDailyConsumption')?((num('currentInventory')+num('openPurchaseOrders'))/num('averageDailyConsumption')).toFixed(1):'—',leadDemand=Math.round(num('averageDailyConsumption')*num('supplierLeadTimeDays'));return <main><header><div><p className="eyebrow">PURCHASING INTELLIGENCE</p><h1>Recommendation review</h1><p className="muted">Buyer input → Investigate → Decide → Act → Validate</p></div><select value={rec.id} onChange={e=>select(items.find(x=>x.id===+e.target.value))}>{items.map(x=><option key={x.id} value={x.id}>{x.product}</option>)}</select></header><section className="hero"><div><p className="eyebrow">SYSTEM RECOMMENDATION</p><h2>{rec.product}</h2><p>{rec.sku} · {rec.node} · Supplier: {rec.supplier} · Unit cost: ${rec.unitCost}</p></div><div className="quantity"><span>Recommended purchase</span><b>800</b><em>units</em></div><button onClick={run} disabled={loading}>{loading?'Agent reviewing…':'Run AI agent review'}</button></section><section className="input-panel"><div><p className="eyebrow">BUYER-PROVIDED LIVE INPUTS</p><h3>Enter current stock, future demand, and consumption</h3><p className="muted">You can clear and replace any value normally; the system does not pre-decide the result.</p></div><div className="input-grid">{fields.map(([key,label,unit,step])=><label key={key}>{label}<div><input type="number" min="0" step={step} value={form[key]??''} onChange={e=>setForm({...form,[key]:e.target.value})}/><small>{unit}</small></div></label>)}</div></section>{review&&<><section className="decision"><div><p className="eyebrow">AGENT DECISION</p><div className={'badge '+review.decision}>{review.decision.replace('_',' ')}</div><p className="summary">{review.summary}</p><div className="split"><span>Original <b>{review.originalQuantity}</b></span><span>Agent quantity <b>{review.recommendedQuantity}</b></span><span>Confidence <b>{Math.round(review.confidence*100)}%</b></span></div></div><div className="action"><p className="eyebrow">ACTION & VALIDATION</p><b>{review.humanApprovalRequired?'Human approval required':review.actionTaken?'Purchase order created':'No action taken'}</b><p>{review.purchaseOrderId&&<>PO #{review.purchaseOrderId} · {review.purchaseOrderStatus}</>}</p><div className={review.validationStatus==='PASSED'?'pass':'neutral'}>{review.validationStatus}</div><small>{review.recoveryResult}</small></div></section><section className="explain-grid"><article><p className="eyebrow">DEMAND & CONSUMPTION EVALUATION</p><h3>How the need was calculated</h3><p>{review.evaluation}</p><div className="calculation"><span>Forecast − inventory − inbound POs</span><b>{form.expectedDemand} − {form.currentInventory} − {form.openPurchaseOrders} = {net} units needed</b><span>Consumption projects {futureUse} units in {form.forecastHorizonDays} days · stock coverage: {coverage} days</span><span>Lead-time demand: {leadDemand} units · Budget limit: {budgetCap} · Storage limit: {storageCap}</span></div></article><article><p className="eyebrow">BUYER RECOMMENDATIONS</p><h3>What to do next</h3><List items={review.buyerRecommendations}/></article><article><p className="eyebrow">VALIDATION FEEDBACK</p><h3>Checks performed</h3><List items={review.validationChecks}/></article></section><section className="factors"><h3>Decision factors</h3>{review.factors.map((f,i)=><article key={i}><span className={f.impact.toLowerCase()}>{f.impact}</span><div><b>{f.factor}</b><p>{f.explanation}</p></div></article>)}{review.validationIssues?.length>0&&<div className="issues">{review.validationIssues.join(' · ')}</div>}</section></>}{error&&<p className="error">{error}</p>}</main>}createRoot(document.getElementById('root')).render(<App/>);
+import React, { useEffect, useState } from 'react';
+import { createRoot } from 'react-dom/client';
+
+import './styles.css';
+import './input.css';
+import './feedback.css';
+
+const API = `${import.meta.env.VITE_API_URL}/api`;
+
+const fields = [
+    ['currentInventory', 'Current inventory', 'units', '1'],
+    ['expectedDemand', 'Future demand forecast', 'units', '1'],
+    ['averageDailyConsumption', 'Average daily consumption', 'units/day', '0.01'],
+    ['forecastHorizonDays', 'Forecast period', 'days', '1'],
+    ['openPurchaseOrders', 'Existing open POs', 'units', '1'],
+    ['supplierLeadTimeDays', 'Supplier lead time', 'days', '1'],
+    ['supplierMinimumOrderQuantity', 'Supplier MOQ', 'units', '1'],
+    ['availableBudget', 'Available budget', '$', '0.01'],
+    ['availableStorageCapacity', 'Available storage', 'units', '1']
+];
+
+const List = ({ items }) => (
+    <ul className="detail-list">
+        {items.map((item, i) => (
+            <li key={i}>{item}</li>
+        ))}
+    </ul>
+);
+
+function App() {
+    const [items, setItems] = useState([]);
+    const [rec, setRec] = useState();
+    const [form, setForm] = useState({});
+    const [review, setReview] = useState();
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState('');
+
+    useEffect(() => {
+        fetch(API + '/purchasing/recommendations')
+            .then((r) => r.json())
+            .then((data) => {
+                setItems(data);
+                select(data[0]);
+            })
+            .catch(() =>
+                setError(
+                    'Backend unavailable. Start Spring Boot on port 8080.'
+                )
+            );
+    }, []);
+
+    function select(item) {
+        setRec(item);
+        setReview();
+
+        setForm({
+            currentInventory: String(item.currentInventory),
+            expectedDemand: String(item.expectedDemand),
+            averageDailyConsumption: String(
+                (item.expectedDemand / 30).toFixed(1)
+            ),
+            forecastHorizonDays: '30',
+            openPurchaseOrders: String(item.openPurchaseOrders),
+            supplierLeadTimeDays: String(item.leadTimeDays),
+            supplierMinimumOrderQuantity: String(item.minimumOrderQuantity),
+            availableBudget: String(item.availableBudget),
+            availableStorageCapacity: String(item.storageCapacity)
+        });
+    }
+
+    async function run() {
+        setLoading(true);
+        setError('');
+
+        const payload = Object.fromEntries(
+            Object.entries(form).map(([key, value]) => [
+                key,
+                value === '' ? null : Number(value)
+            ])
+        );
+
+        try {
+            const r = await fetch(
+                `${API}/purchasing/agent/review/${rec.id}`,
+                {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(payload)
+                }
+            );
+
+            if (!r.ok) {
+                throw Error();
+            }
+
+            setReview(await r.json());
+        } catch {
+            setError(
+                'Could not complete review. Check the backend and values entered.'
+            );
+        } finally {
+            setLoading(false);
+        }
+    }
+
+    if (!rec) {
+        return (
+            <main className="loading">
+                Loading purchasing workspace… {error}
+            </main>
+        );
+    }
+
+    const num = (k) => Number(form[k]) || 0;
+
+    const net = Math.max(
+        0,
+        num('expectedDemand') -
+            num('currentInventory') -
+            num('openPurchaseOrders')
+    );
+
+    const budgetCap = Math.floor(
+        num('availableBudget') / Number(rec.unitCost)
+    );
+
+    const storageCap = Math.max(
+        0,
+        num('availableStorageCapacity') -
+            num('currentInventory') -
+            num('openPurchaseOrders')
+    );
+
+    const futureUse = Math.round(
+        num('averageDailyConsumption') *
+            num('forecastHorizonDays')
+    );
+
+    const coverage = num('averageDailyConsumption')
+        ? (
+              (num('currentInventory') +
+                  num('openPurchaseOrders')) /
+              num('averageDailyConsumption')
+          ).toFixed(1)
+        : '—';
+
+    const leadDemand = Math.round(
+        num('averageDailyConsumption') *
+            num('supplierLeadTimeDays')
+    );
+
+    return (
+        <main>
+            <header>
+                <div>
+                    <p className="eyebrow">PURCHASING INTELLIGENCE</p>
+
+                    <h1>Recommendation review</h1>
+
+                    <p className="muted">
+                        Buyer input → Investigate → Decide → Act → Validate
+                    </p>
+                </div>
+
+                <select
+                    value={rec.id}
+                    onChange={(e) =>
+                        select(
+                            items.find(
+                                (x) => x.id === +e.target.value
+                            )
+                        )
+                    }
+                >
+                    {items.map((x) => (
+                        <option key={x.id} value={x.id}>
+                            {x.product}
+                        </option>
+                    ))}
+                </select>
+            </header>
+
+            <section className="hero">
+                <div>
+                    <p className="eyebrow">SYSTEM RECOMMENDATION</p>
+
+                    <h2>{rec.product}</h2>
+
+                    <p>
+                        {rec.sku} · {rec.node} · Supplier: {rec.supplier} ·
+                        Unit cost: ${rec.unitCost}
+                    </p>
+                </div>
+
+                <div className="quantity">
+                    <span>Recommended purchase</span>
+                    <b>800</b>
+                    <em>units</em>
+                </div>
+
+                <button onClick={run} disabled={loading}>
+                    {loading
+                        ? 'Agent reviewing…'
+                        : 'Run AI agent review'}
+                </button>
+            </section>
+
+            <section className="input-panel">
+                <div>
+                    <p className="eyebrow">
+                        BUYER-PROVIDED LIVE INPUTS
+                    </p>
+
+                    <h3>
+                        Enter current stock, future demand, and
+                        consumption
+                    </h3>
+
+                    <p className="muted">
+                        You can clear and replace any value normally;
+                        the system does not pre-decide the result.
+                    </p>
+                </div>
+
+                <div className="input-grid">
+                    {fields.map(([key, label, unit, step]) => (
+                        <label key={key}>
+                            {label}
+
+                            <div>
+                                <input
+                                    type="number"
+                                    min="0"
+                                    step={step}
+                                    value={form[key] ?? ''}
+                                    onChange={(e) =>
+                                        setForm({
+                                            ...form,
+                                            [key]: e.target.value
+                                        })
+                                    }
+                                />
+
+                                <small>{unit}</small>
+                            </div>
+                        </label>
+                    ))}
+                </div>
+            </section>
+
+            {review && (
+                <>
+                    <section className="decision">
+                        <div>
+                            <p className="eyebrow">AGENT DECISION</p>
+
+                            <div
+                                className={
+                                    'badge ' + review.decision
+                                }
+                            >
+                                {review.decision.replace('_', ' ')}
+                            </div>
+
+                            <p className="summary">
+                                {review.summary}
+                            </p>
+
+                            <div className="split">
+                                <span>
+                                    Original{' '}
+                                    <b>{review.originalQuantity}</b>
+                                </span>
+
+                                <span>
+                                    Agent quantity{' '}
+                                    <b>
+                                        {review.recommendedQuantity}
+                                    </b>
+                                </span>
+
+                                <span>
+                                    Confidence{' '}
+                                    <b>
+                                        {Math.round(
+                                            review.confidence * 100
+                                        )}
+                                        %
+                                    </b>
+                                </span>
+                            </div>
+                        </div>
+
+                        <div className="action">
+                            <p className="eyebrow">
+                                ACTION & VALIDATION
+                            </p>
+
+                            <b>
+                                {review.humanApprovalRequired
+                                    ? 'Human approval required'
+                                    : review.actionTaken
+                                    ? 'Purchase order created'
+                                    : 'No action taken'}
+                            </b>
+
+                            <p>
+                                {review.purchaseOrderId && (
+                                    <>
+                                        PO #{review.purchaseOrderId} ·{' '}
+                                        {review.purchaseOrderStatus}
+                                    </>
+                                )}
+                            </p>
+
+                            <div
+                                className={
+                                    review.validationStatus ===
+                                    'PASSED'
+                                        ? 'pass'
+                                        : 'neutral'
+                                }
+                            >
+                                {review.validationStatus}
+                            </div>
+
+                            <small>{review.recoveryResult}</small>
+                        </div>
+                    </section>
+
+                    <section className="explain-grid">
+                        <article>
+                            <p className="eyebrow">
+                                DEMAND & CONSUMPTION EVALUATION
+                            </p>
+
+                            <h3>How the need was calculated</h3>
+
+                            <p>{review.evaluation}</p>
+
+                            <div className="calculation">
+                                <span>
+                                    Forecast − inventory − inbound POs
+                                </span>
+
+                                <b>
+                                    {form.expectedDemand} −{' '}
+                                    {form.currentInventory} −{' '}
+                                    {form.openPurchaseOrders} = {net}{' '}
+                                    units needed
+                                </b>
+
+                                <span>
+                                    Consumption projects {futureUse}{' '}
+                                    units in{' '}
+                                    {form.forecastHorizonDays} days ·
+                                    stock coverage: {coverage} days
+                                </span>
+
+                                <span>
+                                    Lead-time demand: {leadDemand} units ·
+                                    Budget limit: {budgetCap} · Storage
+                                    limit: {storageCap}
+                                </span>
+                            </div>
+                        </article>
+
+                        <article>
+                            <p className="eyebrow">
+                                BUYER RECOMMENDATIONS
+                            </p>
+
+                            <h3>What to do next</h3>
+
+                            <List
+                                items={review.buyerRecommendations}
+                            />
+                        </article>
+
+                        <article>
+                            <p className="eyebrow">
+                                VALIDATION FEEDBACK
+                            </p>
+
+                            <h3>Checks performed</h3>
+
+                            <List
+                                items={review.validationChecks}
+                            />
+                        </article>
+                    </section>
+
+                    <section className="factors">
+                        <h3>Decision factors</h3>
+
+                        {review.factors.map((f, i) => (
+                            <article key={i}>
+                                <span
+                                    className={f.impact.toLowerCase()}
+                                >
+                                    {f.impact}
+                                </span>
+
+                                <div>
+                                    <b>{f.factor}</b>
+
+                                    <p>{f.explanation}</p>
+                                </div>
+                            </article>
+                        ))}
+
+                        {review.validationIssues?.length > 0 && (
+                            <div className="issues">
+                                {review.validationIssues.join(' · ')}
+                            </div>
+                        )}
+                    </section>
+                </>
+            )}
+
+            {error && <p className="error">{error}</p>}
+        </main>
+    );
+}
+
+createRoot(document.getElementById('root')).render(<App />);
