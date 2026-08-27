@@ -1,6 +1,9 @@
 package com.purchasing.controller;
 import com.purchasing.agent.PurchasingAgent; import com.purchasing.dto.*; import com.purchasing.entity.*; import com.purchasing.repository.*; import com.purchasing.service.*; import org.springframework.web.bind.annotation.*; import java.util.*;
-@RestController @RequestMapping("/api") @CrossOrigin(origins="http://localhost:5173") public class PurchasingController { final RecommendationRepository recs; final PurchasingTools tools; final PurchasingAgent agent; final PurchaseOrderService pos; public PurchasingController(RecommendationRepository r,PurchasingTools t,PurchasingAgent a,PurchaseOrderService p){recs=r;tools=t;agent=a;pos=p;}
+@RestController @RequestMapping("/api") @CrossOrigin(origins = {
+    "http://localhost:5173",
+    "https://aipurchasingagent-1.onrender.com"
+}) public class PurchasingController { final RecommendationRepository recs; final PurchasingTools tools; final PurchasingAgent agent; final PurchaseOrderService pos; public PurchasingController(RecommendationRepository r,PurchasingTools t,PurchasingAgent a,PurchaseOrderService p){recs=r;tools=t;agent=a;pos=p;}
  @GetMapping("/purchasing/recommendations") public List<RecommendationResponse> list(){return recs.findAll().stream().map(this::dto).toList();}
  @GetMapping("/purchasing/recommendations/{id}") public RecommendationResponse get(@PathVariable Long id){return dto(recs.findById(id).orElseThrow());}
  @PostMapping("/purchasing/agent/review/{id}") public ReviewResponse review(@PathVariable Long id,@RequestBody(required=false) ReviewRequest request){return agent.review(id,request);}
